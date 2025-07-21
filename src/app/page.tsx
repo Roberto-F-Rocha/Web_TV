@@ -1,18 +1,32 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { FaBackward, FaForward, FaPause, FaPlay, FaVolumeUp, FaExpand } from "react-icons/fa";
+import {
+  FaBackward,
+  FaForward,
+  FaPause,
+  FaPlay,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaExpand,
+} from "react-icons/fa";
 
 export default function Home() {
+  const [isMounted, setIsMounted] = useState(false); // para evitar Hydration mismatch
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Atualiza a duração do vídeo e o tempo atual
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     const video = videoRef.current;
     if (!video) return;
 
@@ -26,42 +40,48 @@ export default function Home() {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, []);
+  }, [isMounted]);
 
-  // Define o tempo atual do vídeo (clamp evita passar do tempo total)
-  const configCurrentTime = (time: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const clampedTime = Math.max(0, Math.min(time, duration));
-    video.currentTime = clampedTime;
-    setCurrentTime(clampedTime);
-  };
-
-  // Inicia ou pausa o vídeo
   const playPause = () => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (playing) {
-      video.pause();
-    } else {
+    if (video.paused) {
       video.play();
+      setPlaying(true);
+    } else {
+      video.pause();
+      setPlaying(false);
     }
-    setPlaying(!playing);
   };
 
-  // Ajusta o volume do vídeo
+  const skipTime = (seconds: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.currentTime = Math.max(0, Math.min(video.currentTime + seconds, video.duration));
+  };
+
   const changeVolume = (value: number) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const vol = Math.max(0, Math.min(value, 1));
-    video.volume = vol;
-    setVolume(vol);
+    const newVolume = Math.max(0, Math.min(value, 1));
+    video.volume = newVolume;
+    video.muted = newVolume === 0;
+    setVolume(newVolume);
+    setMuted(newVolume === 0);
   };
 
-  // Ativa o modo tela cheia
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const newMuted = !muted;
+    video.muted = newMuted;
+    setMuted(newMuted);
+  };
+
   const toggleFullscreen = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -71,32 +91,19 @@ export default function Home() {
     }
   };
 
+  if (!isMounted) return null; // NÃO renderiza nada até montar no cliente
+
   return (
-    <div className="w-screen h-screen bg-[#222222] flex justify-center items-center">
-      <div className="w-[360px] bg-[#888888] p-4 flex flex-col gap-4 items-center rounded-md shadow-md relative">
-        
+    <div className="w-screen h-screen bg-[#222] flex justify-center items-center">
+      <div className="w-[360px] bg-[#888] p-4 flex flex-col gap-4 items-center rounded-md shadow-md relative">
         <div className="relative w-full">
-          <video ref={videoRef} className="w-full rounded-md" src="./assets/video01.mp4" />
-
-          {/* Botão Play/Pause sobreposto no vídeo */}
-          <button
-            onClick={playPause}
-            className="absolute bottom-4 left-4 bg-white px-3 py-2 rounded-full shadow-md hover:bg-gray-200 transition flex items-center gap-2"
-          >
-            {playing ? (
-              <>
-                <FaPause className="text-black" />
-                <span className="text-black text-sm">Pausar</span>
-              </>
-            ) : (
-              <>
-                <FaPlay className="text-black" />
-                <span className="text-black text-sm">Tocar</span>
-              </>
-            )}
-          </button>
-
-          {/* Botão de tela cheia */}
+          <video
+            ref={videoRef}
+            src="./assets/video01.mp4"
+            className="w-full rounded-md"
+            preload="metadata"
+            controls={false}
+          />
           <button
             onClick={toggleFullscreen}
             className="absolute bottom-4 right-4 bg-white p-2 rounded-full shadow-md hover:bg-gray-200 transition"
@@ -105,9 +112,8 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Controles: Voltar, Play/Pause, Avançar */}
         <div className="flex gap-4 items-center">
-          <button onClick={() => configCurrentTime(currentTime - 10)}>
+          <button onClick={() => skipTime(-10)}>
             <FaBackward className="text-black cursor-pointer" />
           </button>
           <button onClick={playPause}>
@@ -117,12 +123,12 @@ export default function Home() {
               <FaPlay className="text-black cursor-pointer" />
             )}
           </button>
-          <button onClick={() => configCurrentTime(currentTime + 10)}>
+          <button onClick={() => skipTime(10)}>
             <FaForward className="text-black cursor-pointer" />
           </button>
         </div>
 
-        {/* Barra de progresso */}
+        {/* Barra de progresso funcionando */}
         <input
           className="w-full"
           type="range"
@@ -130,18 +136,30 @@ export default function Home() {
           max={duration}
           step={0.01}
           value={currentTime}
-          onChange={(e) => configCurrentTime(Number(e.target.value))}
+          onInput={(e) => {
+            const video = videoRef.current;
+            const newTime = Number((e.target as HTMLInputElement).value);
+            if (video) {
+              video.currentTime = newTime;
+            }
+            setCurrentTime(newTime);
+          }}
         />
 
-        {/* Controle de volume */}
         <div className="flex items-center gap-2 w-full">
-          <FaVolumeUp className="text-black" />
+          <button onClick={toggleMute}>
+            {muted || volume === 0 ? (
+              <FaVolumeMute className="text-black" />
+            ) : (
+              <FaVolumeUp className="text-black" />
+            )}
+          </button>
           <input
             type="range"
             min={0}
             max={1}
             step={0.01}
-            value={volume}
+            value={muted ? 0 : volume}
             onChange={(e) => changeVolume(Number(e.target.value))}
             className="w-full"
           />
