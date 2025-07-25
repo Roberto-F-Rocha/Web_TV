@@ -46,16 +46,8 @@ export default function Home() {
     setCurrentTime(0);
     setDuration(0);
 
-    const handleLoadedMetadata = () => setDuration(video.duration);
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
-
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("timeupdate", handleTimeUpdate);
-
     return () => {
       video.pause();
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("timeupdate", handleTimeUpdate);
     };
   }, [isMounted, currentVideoIndex]);
 
@@ -123,12 +115,6 @@ export default function Home() {
     }
   };
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  };
-
   if (!isMounted) return null;
 
   return (
@@ -161,7 +147,6 @@ export default function Home() {
             className="w-full rounded-md"
             preload="metadata"
             controls={false}
-            onEnded={nextVideo}
           />
 
           {/* Botões de adiantar/voltar 10s */}
@@ -219,7 +204,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Barra de progresso */}
+        {/* Barra de progresso (manual apenas) */}
         <input
           className="w-full"
           type="range"
@@ -227,9 +212,9 @@ export default function Home() {
           max={duration}
           step={0.01}
           value={currentTime}
-          onInput={(e) => {
+          onChange={(e) => {
             const video = videoRef.current;
-            const newTime = Number((e.target as HTMLInputElement).value);
+            const newTime = Number(e.target.value);
             if (video) {
               video.currentTime = newTime;
             }
@@ -237,11 +222,6 @@ export default function Home() {
           }}
           aria-label="Barra de progresso do vídeo"
         />
-
-        {/* Tempo atual e duração */}
-        <div className="w-full text-sm text-black text-right font-mono">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </div>
 
         {/* Controle de volume */}
         <div className="flex items-center gap-2 w-full">
